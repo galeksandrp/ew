@@ -103,12 +103,15 @@ class myThread(threading.Thread):
             self._qLock.release()
 
             result = checkURL(self.name, 'https://'+subdomain)
-            if result in [domain.OK, domain.DNS]:
+            if result in [domain.OK, domain.MCB, domain.DNS]:
                 self._append(result, subdomain)
             else:
-                print('[{0}] {1}, Downgrading.'.format(result[0], subdomain))
-                if checkURL(self.name, 'http://'+subdomain, downgrade=True) is domain.OK:
+                print('\t[{0}] {1}, Downgrading.'.format(result[0], subdomain))
+                downgradeResult = checkURL(self.name, 'http://'+subdomain, downgrade=True)
+                if downgradeResult is domain.OK:
                     self._append(result, subdomain)
+                else:
+                    print('\t\t[Downgrade] http://{} {}. Ign.'.format(subdomain, downgradeResult[0]))
 
     def _append(self, result, subdomain):
         self._rLock.acquire()
