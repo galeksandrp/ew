@@ -155,12 +155,12 @@ class Check:
             print('\n\t'+row[0]+':')
             row.remove(row[0])
 
-            for subdomain in sorted(row, key=functools.cmp_to_key(sublist3r.subdomain_cmp)):
+            for subdomain in sorted(row, key=sublist3r.subdomain_sorting_key):
                 print("\t\t- "+subdomain)
         print("-->")
 
         print('<ruleset name="{0}">'.format(tDomain))
-        for row in sorted(domain.OK, key=functools.cmp_to_key(sublist3r.subdomain_cmp)):
+        for row in sorted(domain.OK, key=sublist3r.subdomain_sorting_key):
             print('\t<target host="{0}" />'.format(row))
         print('</ruleset>\n')
 
