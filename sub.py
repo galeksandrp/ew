@@ -1,39 +1,10 @@
-from Sublist3r import sublist3r
 from pprint import pprint
+from Sublist3r import sublist3r
+from error import domain, httpError
 import urllib.request, ssl, socket
 import json, queue, re, threading, time
 
 
-class domain:
-    OK = []
-    DNS = ['DNS']
-    Reset = ['Reset']
-    Refused = ['Refused']
-    Timeout = ['Timeout']
-    InvalidCert = ['Invalid Certificate']
-    BadRequest = ['400']
-    Unauthorized = ['401']
-    Forbidden = ['403']
-    NotFound = ['404']
-    Unavailable = ['503']
-    UnknownProtocol = ['UnknownProtocol']
-    MCB = ['MCB']
-    Redirect = ['Redirect']
-    Other = ['Other']
-    ProblematicRef = (
-        Reset, Refused, Timeout, UnknownProtocol, InvalidCert,
-        BadRequest, Unauthorized, Forbidden, NotFound, Unavailable,
-        MCB, Redirect, Other
-    )
-
-httpError = {
-    400: domain.BadRequest,
-    401: domain.Unauthorized,
-    403: domain.Forbidden,
-    404: domain.NotFound,
-    500: domain.Unavailable,
-    503: domain.Unavailable
-}
 
 def checkURL(name, url, downgrade=False):
     print('[{name}] Testing: {url}'.format(name=name, url=url))
@@ -66,8 +37,10 @@ def checkURL(name, url, downgrade=False):
     except ConnectionResetError:
         return domain.Reset
 
+    if downgrade: return domain.OK
+
     finalUrl = res.geturl()
-    if re.match('^https:\/\/', finalUrl, re.I) or downgrade:
+    if re.match('^https:\/\/', finalUrl, re.I):
         try: mes = res.read().decode()
         except UnicodeDecodeError:
             print(url+' decode error.')
@@ -112,6 +85,7 @@ class myThread(threading.Thread):
                     self._append(result, subdomain)
                 else:
                     print('\t\t[Downgrade] http://{} {}. Ign.'.format(subdomain, downgradeResult[0]))
+                    self._append(domain.Ign, '{} ({}) ({})'.format(subdomain, result[0], downgradeResult[0]))
 
     def _append(self, result, subdomain):
         self._rLock.acquire()
@@ -173,7 +147,6 @@ if __name__ == '__main__':
     )
     try:
         for browser in ('chrome', 'firefox', 'tor'):
-            print(browser)
             if preload[browser]['present'] and preload[browser]['include_subdomains']:
                 exit('Domain preloaded.')
     except TypeError:
