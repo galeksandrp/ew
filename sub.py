@@ -1,7 +1,7 @@
 from Sublist3r import sublist3r
 from pprint import pprint
 import urllib.request, ssl, socket
-import time, threading, queue, functools, re
+import json, queue, re, threading, time
 
 
 class domain:
@@ -166,6 +166,19 @@ class Check:
 
 if __name__ == '__main__':
     tDomain = input('domain: ')
+
+    print('Checking preloading...')
+    preload = json.loads(
+        urllib.request.urlopen('https://hstspreload.com/api/v1/status/'+tDomain).read().decode()
+    )
+    try:
+        for browser in ('chrome', 'firefox', 'tor'):
+            print(browser)
+            if preload[browser]['present'] and preload[browser]['include_subdomains']:
+                exit('Domain preloaded.')
+    except TypeError:
+        pass
+
     subdomains = tuple(
         sublist3r.main(
             domain=tDomain, threads=30, savefile=None,
