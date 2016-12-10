@@ -53,7 +53,7 @@ def checkURL(name, url, downgrade=False):
             pprint(mcb)
             return domain.MCB
     else:
-        print('https://{0} redirected to {1}'.format(url, finalUrl))
+        print('{0} redirected to {1}'.format(url, finalUrl))
         return domain.Redirect
 
 
