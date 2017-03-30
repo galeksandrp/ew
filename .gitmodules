@@ -1,4 +1,4 @@
 [submodule "Sublist3r"]
 	path = Sublist3r
-	url = git@github.com:gloomy-ghost/Sublist3r.git
+	url = https://github.com/gloomy-ghost/Sublist3r.git
 	branch = module
