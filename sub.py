@@ -1,131 +1,133 @@
+# pylint: disable=C0111
+import re
+import ssl
+import json
+import time
+import queue
+import socket
+import threading
+import urllib.request
 from pprint import pprint
 from Sublist3r import sublist3r
-from error import domain, httpError
-import urllib.request, ssl, socket
-import json, queue, re, threading, time
+from error import domain, HTTP_ERROR, URL_ERROR
 
+Y = '\033[93m'  # yellow
+R = '\033[91m'  # red
+W = '\033[0m'   # white
+
+UA = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.71 Safari/537.36'}
+THREAD_LIST = ["Thread-1", "Thread-2", "Thread-3", "Thread-4", "Thread-5"]
+WORK_QUEUE = queue.Queue(0)
+QUEUE_LOCK = threading.Lock()
+RESULT_LOCK = threading.Lock()
+MCB_PATTERN = r'(http:\/\/[.\w-]+\/[./\w_-]+\.(css|jpe?g|js|web[pm]|png|gif))'
 
 
 def checkURL(name, url, downgrade=False):
     print('[{name}] Testing: {url}'.format(name=name, url=url))
-    req = urllib.request.Request(
-            url, headers=ua)
+    req = urllib.request.Request(url, headers=UA)
     try:
         res = urllib.request.urlopen(req, timeout=10)
-    except (ssl.CertificateError):
+    except ssl.CertificateError:
         return domain.InvalidCert
-    except (socket.timeout):
+    except socket.timeout:
         return domain.Timeout
     except urllib.error.HTTPError as e:
-        return httpError[e.code]
+        return HTTP_ERROR[e.code]
     except urllib.error.URLError as e:
-        if str(e.reason) == '[Errno 11001] getaddrinfo failed' \
-             or str(e.reason) == '[Errno 11002] getaddrinfo failed':
-            return domain.DNS
-        elif str(e.reason) == '[WinError 10061] 由于目标计算机积极拒绝，无法连接。':
-            return domain.Refused
-        elif str(e.reason) == 'EOF occurred in violation of protocol (_ssl.c:645)':
-            return domain.Reset
-        elif str(e.reason) == 'timed out':
-            return domain.Timeout
-        elif str(e.reason) == '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:645)':
-            return domain.InvalidCert
-        elif str(e.reason) == '[SSL: UNKNOWN_PROTOCOL] unknown protocol (_ssl.c:645)':
-            return domain.UnknownProtocol
-        print('Fail: ['+url+'] '+str(e.reason))
-        return domain.Other
+        reason = str(e.reason)
+        try:
+            return URL_ERROR[reason]
+        except KeyError:
+            print(f'{R}Fail: [{url}] {reason}{W}')
+            return domain.Other
     except ConnectionResetError:
         return domain.Reset
 
-    if downgrade: return domain.OK
+    if downgrade:
+        return domain.OK
 
-    finalUrl = res.geturl()
-    if re.match('^https:\/\/', finalUrl, re.I):
-        try: mes = res.read().decode()
+    final_url = res.geturl()
+    if re.match(r'^https:\/\/', final_url, re.I):
+        try:
+            mes = res.read().decode()
         except UnicodeDecodeError:
-            print(url+' decode error.')
+            print(f'{Y}{url} decode error.{W}')
             return domain.Other
-        mcb = re.findall('(http:\/\/[.\w-]+\/[./\w_-]+\.(css|jpe?g|js|web[pm]|png|gif))', mes, re.I)
-        if len(mcb) == 0:
-            return domain.OK
-        else:
-            print('[MCB] On URL [{0}]'.format(finalUrl))
+
+        mcb = re.findall(MCB_PATTERN, mes, re.I)
+        if mcb:
+            print(f'{Y}[MCB] On URL [{final_url}]{W}')
             pprint(mcb)
             return domain.MCB
+        return domain.OK
     else:
-        print('{0} redirected to {1}'.format(url, finalUrl))
+        print(f'{url} redirected to {final_url}')
         return domain.Redirect
 
 
 
 class myThread(threading.Thread):
-    def __init__(self, name, q, qLock, rLock):
-        threading.Thread.__init__(self)
+    def __init__(self, name):
+        super().__init__()
         self.name = name
-        self._q = q
-        self._qLock = qLock
-        self._rLock = rLock
 
     def run(self):
-        while not self._q.empty():
-            self._qLock.acquire()
-            if self._q.empty():
-                self._qLock.release()
+        while not WORK_QUEUE.empty():
+            QUEUE_LOCK.acquire()
+            if WORK_QUEUE.empty():
+                QUEUE_LOCK.release()
                 time.sleep(5)
-            subdomain = self._q.get()
-            self._qLock.release()
+            subdomain = WORK_QUEUE.get()
+            QUEUE_LOCK.release()
 
             result = checkURL(self.name, 'https://'+subdomain)
             if result in [domain.OK, domain.MCB, domain.DNS]:
                 self._append(result, subdomain)
             else:
-                print('\t[{0}] {1}, Downgrading.'.format(result[0], subdomain))
-                downgradeResult = checkURL(self.name, 'http://'+subdomain, downgrade=True)
-                if downgradeResult is domain.OK:
+                print(f'{Y}[{result[0]}] {subdomain}, Downgrading.{W}')
+                downgrade_result = checkURL(self.name, 'http://'+subdomain, downgrade=True)
+                if downgrade_result is domain.OK:
                     self._append(result, subdomain)
                 else:
-                    print('\t\t[Downgrade] http://{} {}. Ign.'.format(subdomain, downgradeResult[0]))
-                    self._append(domain.Ign, '{} ({}) ({})'.format(subdomain, result[0], downgradeResult[0]))
+                    print(f'{Y}[Downgrade] http://{subdomain} {downgrade_result[0]}. Ign.{W}')
+                    self._append(domain.Ign, f'{subdomain} ({result[0]}) ({downgrade_result[0]})')
 
     def _append(self, result, subdomain):
-        self._rLock.acquire()
+        RESULT_LOCK.acquire()
         result.append(subdomain)
-        self._rLock.release()
-
-
-ua = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/54.0.2840.71 Safari/537.36'}
-threadList = ["Thread-1", "Thread-2", "Thread-3", "Thread-4", "Thread-5"]
-workQueue = queue.Queue(0)
+        RESULT_LOCK.release()
 
 class Check:
     def __init__(self, subdomains):
         if subdomains == ():
             raise SystemExit('Fail: 0 Subdomain')
         self._subdomains = subdomains
-        self._queueLock = threading.Lock()
-        self._resultLock = threading.Lock()
 
     def start(self):
-        self._queueLock.acquire()
+        QUEUE_LOCK.acquire()
         for subdomain in subdomains:
-            workQueue.put(subdomain)
-        self._queueLock.release()
+            WORK_QUEUE.put(subdomain)
+        QUEUE_LOCK.release()
 
         threads = []
-        for tName in threadList:
-            thread = myThread(tName, workQueue, self._queueLock, self._resultLock)
+        for thread_name in THREAD_LIST:
+            thread = myThread(thread_name)
             thread.start()
             threads.append(thread)
 
-        for t in threads:
-            t.join()
+        for thread in threads:
+            thread.join()
         self.out()
 
     def out(self):
         print("<!--")
         for row in domain.ProblematicRef:
-            try: row[1]
-            except IndexError: continue
+            try:
+                row[1]
+            except IndexError:
+                continue
+
             print('\n\t'+row[0]+':')
             row.remove(row[0])
 
@@ -159,5 +161,4 @@ if __name__ == '__main__':
             enable_bruteforce=False, engines=None
         )
     )
-    check = Check(subdomains)
-    check.start()
+    Check(subdomains).start()

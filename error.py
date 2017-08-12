@@ -1,3 +1,4 @@
+# pylint: skip-file
 class domain:
     OK = []
     DNS = ['DNS']
@@ -22,7 +23,7 @@ class domain:
         MCB, Redirect, Other, Ign
     )
 
-httpError = {
+HTTP_ERROR = {
     400: domain.BadRequest,
     401: domain.Unauthorized,
     403: domain.Forbidden,
@@ -32,4 +33,14 @@ httpError = {
     502: domain.Unavailable,
     503: domain.Unavailable,
     504: domain.Unavailable
+}
+
+URL_ERROR = {
+    '[Errno 11001] getaddrinfo failed': domain.DNS,
+    '[Errno 11002] getaddrinfo failed': domain.DNS,
+    '[WinError 10061] 由于目标计算机积极拒绝，无法连接。': domain.Refused,
+    'EOF occurred in violation of protocol (_ssl.c:645)': domain.Reset,
+    'timed out': domain.Timeout,
+    '[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed (_ssl.c:749)': domain.InvalidCert,
+    '[SSL: UNKNOWN_PROTOCOL] unknown protocol (_ssl.c:645)': domain.UnknownProtocol
 }
